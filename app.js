@@ -12,9 +12,11 @@ const COMPRESS_LZMA = '11';
 const COMPRESS_PAKO = '110';
 
 // 图片路径配置
+// 297 = 续标识 (/续标识) = CHAR_ZERO = \u0014\u01A8
+// 424 = 拜谢 (/拜谢) = CHAR_ONE = \u0014\u0129
 const EMOJI_IMAGES = {
-    zero: 'assets/qq_emoji/297/apng/297.png',
-    one: 'assets/qq_emoji/424/apng/424.png'
+    zero: 'assets/qq_emoji/297/apng/297.png',  // 续标识 - 0
+    one: 'assets/qq_emoji/424/apng/424.png'    // 拜谢 - 1
 };
 
 // Brotli 模块缓存
@@ -200,8 +202,16 @@ function emojiToBinary(emojiStr) {
             binary += '1';
             i += 2;
         } else {
-            // 跳过无法识别的字符
-            i++;
+            // 跳过无法识别的字符（包括零宽字符、换行等）
+            const char = emojiStr[i];
+            const code = char.charCodeAt(0);
+            // 跳过控制字符和零宽字符
+            if (code < 32 || code === 0x200B || code === 0xFEFF) {
+                i++;
+            } else {
+                // 可能是半个字符对，尝试跳过
+                i++;
+            }
         }
     }
     return binary;
@@ -454,9 +464,10 @@ document.addEventListener('DOMContentLoaded', () => {
     encryptResult.addEventListener('click', async () => {
         const emojiText = encryptResult.dataset.emojiText;
         if (!emojiText) return;
-        
+
         try {
-            const blob = new Blob([emojiText], { type: 'text/plain' });
+            // 使用 UTF-8 编码的 Blob
+            const blob = new Blob([emojiText], { type: 'text/plain;charset=utf-8' });
             const item = new ClipboardItem({ 'text/plain': blob });
             await navigator.clipboard.write([item]);
             encryptResult.style.background = '#e8e8e8';
@@ -464,10 +475,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 encryptResult.style.background = '';
             }, 200);
         } catch (e) {
+            // 降级方案
             const textarea = document.createElement('textarea');
             textarea.value = emojiText;
             textarea.style.position = 'fixed';
             textarea.style.opacity = '0';
+            textarea.setAttribute('readonly', '');
             document.body.appendChild(textarea);
             textarea.select();
             document.execCommand('copy');
@@ -478,4 +491,5 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 200);
         }
     });
+
 });
