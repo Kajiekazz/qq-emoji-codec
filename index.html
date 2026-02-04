@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>文本编码工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-body: #e8e4df;
+            --bg-container: #f5f3f0;
+            --bg-header: #4a4a4a;
+            --bg-tabs: #e0dcd6;
+            --bg-content: #f5f3f0;
+            --bg-input: #ffffff;
+            --bg-result: #ebe8e3;
+            --border-color: #c5c0b8;
+            --border-input: #b8b3ab;
+            --text-primary: #2d2d2d;
+            --text-secondary: #555555;
+            --text-hint: #888888;
+            --tab-active-bg: #f5f3f0;
+            --tab-active-border: #6b6b6b;
+            --accent-color: #5a5a5a;
+            --btn-hover: #3a3a3a;
+            --shadow: rgba(0,0,0,0.08);
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #1a1a1a;
+            --bg-container: #242424;
+            --bg-header: #2d2d2d;
+            --bg-tabs: #1f1f1f;
+            --bg-content: #242424;
+            --bg-input: #1a1a1a;
+            --bg-result: #1f1f1f;
+            --border-color: #3a3a3a;
+            --border-input: #404040;
+            --text-primary: #d0d0d0;
+            --text-secondary: #a0a0a0;
+            --text-hint: #707070;
+            --tab-active-bg: #242424;
+            --tab-active-border: #808080;
+            --accent-color: #505050;
+            --btn-hover: #606060;
+            --shadow: rgba(0,0,0,0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg-body);
+            min-height: 100vh;
+            padding: 20px;
+            transition: background 0.3s;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--bg-container);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .header {
+            background: var(--bg-header);
+            color: var(--text-primary);
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #e0e0e0;
+        }
+
+        .header-emoji {
+            width: 28px;
+            height: 28px;
+            vertical-align: middle;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 50%;
+            right: 56px;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .theme-toggle svg {
+            width: 18px;
+            height: 18px;
+            fill: #e0e0e0;
+        }
+
+        .github-link {
+            position: absolute;
+            top: 50%;
+            right: 16px;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .github-link:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .github-link svg {
+            width: 20px;
+            height: 20px;
+            fill: #e0e0e0;
+        }
+
+        .tabs {
+            display: flex;
+            background: var(--bg-tabs);
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 14px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            background: rgba(128,128,128,0.05);
+        }
+
+        .tab.active {
+            background: var(--tab-active-bg);
+            border-bottom-color: var(--tab-active-border);
+            color: var(--text-primary);
+        }
+
+        .content {
+            padding: 24px;
+            background: var(--bg-content);
+            transition: background 0.3s;
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .input-group textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid var(--border-input);
+            border-radius: 4px;
+            font-size: 15px;
+            resize: vertical;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .input-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .btn {
+            padding: 10px 24px;
+            background: var(--bg-header);
+            color: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--btn-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tabs);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .result-area {
+            margin-top: 20px;
+            padding: 18px;
+            background: var(--bg-result);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .result-area label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .emoji-display {
+            font-size: 20px;
+            line-height: 1.6;
+            word-break: break-all;
+            padding: 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            min-height: 60px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .emoji-display:hover {
+            border-color: var(--accent-color);
+        }
+
+        .emoji-display .emoji-wrapper {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            vertical-align: middle;
+            margin: 0 1px;
+        }
+
+        .emoji-display .emoji-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            -webkit-user-drag: none;
+        }
+
+        .stats {
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--text-hint);
+            transition: color 0.3s;
+        }
+
+        .stats span {
+            margin-right: 18px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .emoji-input-container {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid var(--border-input);
+            border-radius: 4px;
+            font-size: 20px;
+            line-height: 1.6;
+            background: var(--bg-input);
+            word-break: break-all;
+            color: var(--text-primary);
+            transition: all 0.3s;
+        }
+
+        .emoji-input-container:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .emoji-input-container:empty:before {
+            content: attr(placeholder);
+            color: var(--text-hint);
+            font-size: 15px;
+        }
+
+        .emoji-input-container .emoji-wrapper {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            vertical-align: middle;
+            margin: 0 1px;
+        }
+
+        .emoji-input-container .emoji-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            -webkit-user-drag: none;
+        }
+
+        .hint {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--text-hint);
+            transition: color 0.3s;
+        }
+
+        /* 手机端适配 */
+        @media (max-width: 640px) {
+            body {
+                padding: 0;
+                background: var(--bg-container);
+            }
+
+            .container {
+                border: none;
+                box-shadow: none;
+                max-width: 100%;
+            }
+
+            .header {
+                padding: 14px 16px;
+            }
+
+            .header h1 {
+                font-size: 16px;
+            }
+
+            .header-icon {
+                width: 20px;
+                height: 20px;
+            }
+
+            .theme-toggle {
+                right: 50px;
+                width: 32px;
+                height: 32px;
+            }
+
+            .theme-toggle svg {
+                width: 16px;
+                height: 16px;
+            }
+
+            .github-link {
+                right: 12px;
+                width: 32px;
+                height: 32px;
+            }
+
+            .github-link svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .tab {
+                padding: 12px;
+                font-size: 14px;
+            }
+
+            .content {
+                padding: 16px;
+            }
+
+            .input-group textarea,
+            .emoji-input-container {
+                min-height: 100px;
+                padding: 10px;
+                font-size: 16px; /* 防止iOS缩放 */
+            }
+
+            .btn {
+                padding: 12px 20px;
+                font-size: 15px;
+                flex: 1;
+            }
+
+            .button-group {
+                gap: 10px;
+            }
+
+            .result-area {
+                padding: 14px;
+            }
+
+            .emoji-display {
+                padding: 12px;
+                font-size: 18px;
+                min-height: 50px;
+            }
+
+            .emoji-display .emoji-wrapper,
+            .emoji-input-container .emoji-wrapper {
+                width: 24px;
+                height: 24px;
+            }
+
+            .stats {
+                font-size: 12px;
+            }
+
+            .stats span {
+                display: block;
+                margin-right: 0;
+                margin-bottom: 4px;
+            }
+        }
+
+        /* 小屏幕手机 */
+        @media (max-width: 360px) {
+            .header h1 {
+                font-size: 15px;
+            }
+
+            .content {
+                padding: 12px;
+            }
+
+            .tab {
+                padding: 10px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <img src="assets/qq_emoji/297/apng/297.png" class="header-emoji" alt="" draggable="false">
+                <img src="assets/qq_emoji/424/apng/424.png" class="header-emoji" alt="" draggable="false">
+                编解码工具
+            </h1>
+            <button class="theme-toggle" id="theme-toggle" title="切换主题">
+                <svg id="theme-icon-sun" viewBox="0 0 24 24" style="display: none;">
+                    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 000-1.41.996.996 0 00-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 000 1.41.996.996 0 001.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06z"/>
+                </svg>
+                <svg id="theme-icon-moon" viewBox="0 0 24 24">
+                    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                </svg>
+            </button>
+            <a href="https://github.com/Kajiekazz/qq-emoji-codec" target="_blank" class="github-link" title="GitHub 仓库">
+                <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+            </a>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="encrypt">编码</div>
+            <div class="tab" data-tab="decrypt">解码</div>
+        </div>
+
+        <div class="content">
+            <div class="panel active" id="encrypt-panel">
+                <div class="input-group">
+                    <label>输入文本：</label>
+                    <textarea id="encrypt-input" placeholder="输入要编码的内容"></textarea>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn" id="encrypt-btn">编码</button>
+                    <button class="btn btn-secondary" id="clear-encrypt-btn">清空</button>
+                </div>
+
+                <div class="result-area">
+                    <label>编码结果（点击复制）：</label>
+                    <div class="emoji-display" id="encrypt-result"></div>
+                    <p class="hint">提示：点击上方区域复制</p>
+                    <div class="stats" id="encrypt-stats"></div>
+                </div>
+            </div>
+
+            <div class="panel" id="decrypt-panel">
+                <div class="input-group">
+                    <label>输入编码内容：</label>
+                    <div class="emoji-input-container" id="decrypt-input-container" contenteditable="true" placeholder="粘贴编码内容"></div>
+                    <textarea id="decrypt-input" style="display: none;"></textarea>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn" id="decrypt-btn">解码</button>
+                    <button class="btn btn-secondary" id="clear-decrypt-btn">清空</button>
+                </div>
+
+                <div class="result-area">
+                    <label>解码结果：</label>
+                    <div class="emoji-display" id="decrypt-result" style="font-size: 15px; white-space: pre-wrap;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="libs/pako.min.js"></script>
+    <script src="libs/lzma-browser.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
