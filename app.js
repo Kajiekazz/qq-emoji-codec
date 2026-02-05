@@ -9,7 +9,6 @@ const CHAR_ONE = '\u0014\u0129';
 const COMPRESS_NONE = '0';
 const COMPRESS_BROTLI = '10';
 const COMPRESS_LZMA = '11';
-const COMPRESS_PAKO = '110';
 
 // 图片路径配置
 // 297 = 续标识 (/续标识) = CHAR_ZERO = \u0014\u01A8
@@ -95,24 +94,6 @@ async function decompressBrotli(data) {
     return null;
 }
 
-function tryPakoCompress(data) {
-    try {
-        return pako.deflate(data, { level: 9 });
-    } catch (e) {
-        console.error('pako compress error:', e);
-        return null;
-    }
-}
-
-function decompressPako(data) {
-    try {
-        return pako.inflate(data);
-    } catch (e) {
-        console.error('pako decompress error:', e);
-        return null;
-    }
-}
-
 function tryLzmaCompress(data) {
     return new Promise((resolve) => {
         try {
@@ -161,24 +142,20 @@ async function selectBestCompression(utf8Data) {
     const originalLength = utf8Data.length;
 
     // 并行尝试所有压缩方式
-    const [brotliCompressed, lzmaCompressed, pakoCompressed] = await Promise.all([
+    const [brotliCompressed, lzmaCompressed] = await Promise.all([
         tryBrotliCompress(utf8Data),
-        tryLzmaCompress(utf8Data),
-        tryPakoCompress(utf8Data)
+        tryLzmaCompress(utf8Data)
     ]);
 
     const brotliLength = brotliCompressed ? brotliCompressed.length : Infinity;
     const lzmaLength = lzmaCompressed ? lzmaCompressed.length : Infinity;
-    const pakoLength = pakoCompressed ? pakoCompressed.length : Infinity;
 
-    const minLength = Math.min(brotliLength, lzmaLength, pakoLength, originalLength);
+    const minLength = Math.min(brotliLength, lzmaLength, originalLength);
 
     if (minLength === brotliLength) {
         return { type: COMPRESS_BROTLI, data: brotliCompressed, originalLength, compressedLength: brotliLength };
     } else if (minLength === lzmaLength) {
         return { type: COMPRESS_LZMA, data: lzmaCompressed, originalLength, compressedLength: lzmaLength };
-    } else if (minLength === pakoLength) {
-        return { type: COMPRESS_PAKO, data: pakoCompressed, originalLength, compressedLength: pakoLength };
     } else {
         return { type: COMPRESS_NONE, data: utf8Data, originalLength, compressedLength: originalLength };
     }
@@ -279,15 +256,12 @@ async function decrypt(emojiStr) {
     let header = '';
     let dataStart = 0;
 
-    // 注意顺序：先检查长的头部
-    if (binaryStr.slice(0, 3) === COMPRESS_PAKO) {
-        header = COMPRESS_PAKO;
-        dataStart = 3;
+    // 检查头部 (注意：11 必须在 10 之前检查，因为 10 是 11 的前缀)
+    if (binaryStr.slice(0, 2) === COMPRESS_LZMA) {
+        header = COMPRESS_LZMA;
+        dataStart = 2;
     } else if (binaryStr.slice(0, 2) === COMPRESS_BROTLI) {
         header = COMPRESS_BROTLI;
-        dataStart = 2;
-    } else if (binaryStr.slice(0, 2) === COMPRESS_LZMA) {
-        header = COMPRESS_LZMA;
         dataStart = 2;
     } else if (binaryStr[0] === '0') {
         header = COMPRESS_NONE;
@@ -306,8 +280,6 @@ async function decrypt(emojiStr) {
         utf8Data = await decompressBrotli(compressedData);
     } else if (header === COMPRESS_LZMA) {
         utf8Data = await decompressLzma(compressedData);
-    } else if (header === COMPRESS_PAKO) {
-        utf8Data = decompressPako(compressedData);
     }
     
     if (!utf8Data) {
@@ -321,7 +293,6 @@ async function decrypt(emojiStr) {
         case COMPRESS_NONE: compressionName = '无压缩'; break;
         case COMPRESS_BROTLI: compressionName = 'Brotli'; break;
         case COMPRESS_LZMA: compressionName = 'LZMA'; break;
-        case COMPRESS_PAKO: compressionName = 'Deflate'; break;
         default: compressionName = '未知';
     }
     
