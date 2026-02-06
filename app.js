@@ -8,7 +8,7 @@ const CHAR_ONE = '\u0014\u0129';
 // 压缩类型标记
 const COMPRESS_NONE = '0';
 const COMPRESS_BROTLI = '10';
-const COMPRESS_LZMA = '11';
+const COMPRESS_ZSTD = '11';
 
 // 图片路径配置
 // 297 = 续标识 (/续标识) = CHAR_ZERO = \u0014\u01A8
@@ -94,68 +94,71 @@ async function decompressBrotli(data) {
     return null;
 }
 
-function tryLzmaCompress(data) {
-    return new Promise((resolve) => {
-        try {
-            if (typeof LZMA !== 'undefined') {
-                LZMA.compress(data, 9, (result, error) => {
-                    if (error) {
-                        console.error('lzma compress error:', error);
-                        resolve(null);
-                    } else {
-                        resolve(new Uint8Array(result));
-                    }
-                });
-            } else {
-                resolve(null);
-            }
-        } catch (e) {
-            console.error('lzma compress error:', e);
-            resolve(null);
-        }
-    });
+// Zstd 模块缓存
+let zstdLoaded = false;
+let zstdModule = null;
+
+// 动态加载 Zstd
+async function loadZstd() {
+    if (zstdLoaded) return zstdModule;
+    
+    try {
+        const { init, compress, decompress } = await import('@bokuweb/zstd-wasm');
+        await init();
+        zstdLoaded = true;
+        zstdModule = { compress, decompress };
+        console.log('Zstd 加载成功');
+        return zstdModule;
+    } catch (e) {
+        console.warn('Zstd 加载失败:', e);
+        return null;
+    }
 }
 
-function decompressLzma(data) {
-    return new Promise((resolve) => {
-        try {
-            if (typeof LZMA !== 'undefined') {
-                LZMA.decompress(data, (result, error) => {
-                    if (error) {
-                        console.error('lzma decompress error:', error);
-                        resolve(null);
-                    } else {
-                        resolve(new Uint8Array(result));
-                    }
-                });
-            } else {
-                resolve(null);
-            }
-        } catch (e) {
-            console.error('lzma decompress error:', e);
-            resolve(null);
+// Zstd 压缩
+async function tryZstdCompress(data) {
+    try {
+        const zstd = await loadZstd();
+        if (zstd && zstd.compress) {
+            return zstd.compress(data, 10);
         }
-    });
+    } catch (e) {
+        console.warn('Zstd compress error:', e);
+        return null;
+    }
+}
+
+// Zstd 解压
+async function decompressZstd(data) {
+    try {
+        const zstd = await loadZstd();
+        if (zstd && zstd.decompress) {
+            return zstd.decompress(data);
+        }
+    } catch (e) {
+        console.warn('Zstd decompress error:', e);
+        return null;
+    }
 }
 
 async function selectBestCompression(utf8Data) {
     const originalLength = utf8Data.length;
 
     // 并行尝试所有压缩方式
-    const [brotliCompressed, lzmaCompressed] = await Promise.all([
+    const [brotliCompressed, zstdCompressed] = await Promise.all([
         tryBrotliCompress(utf8Data),
-        tryLzmaCompress(utf8Data)
+        tryZstdCompress(utf8Data)
     ]);
 
     const brotliLength = brotliCompressed ? brotliCompressed.length : Infinity;
-    const lzmaLength = lzmaCompressed ? lzmaCompressed.length : Infinity;
+    const zstdLength = zstdCompressed ? zstdCompressed.length : Infinity;
 
-    const minLength = Math.min(brotliLength, lzmaLength, originalLength);
+    const minLength = Math.min(brotliLength, zstdLength, originalLength);
 
     if (minLength === brotliLength) {
         return { type: COMPRESS_BROTLI, data: brotliCompressed, originalLength, compressedLength: brotliLength };
-    } else if (minLength === lzmaLength) {
-        return { type: COMPRESS_LZMA, data: lzmaCompressed, originalLength, compressedLength: lzmaLength };
+    } else if (minLength === zstdLength) {
+        return { type: COMPRESS_ZSTD, data: zstdCompressed, originalLength, compressedLength: zstdLength };
     } else {
         return { type: COMPRESS_NONE, data: utf8Data, originalLength, compressedLength: originalLength };
     }
@@ -230,8 +233,7 @@ async function encrypt(text) {
     switch (compression.type) {
         case COMPRESS_NONE: compressionName = '无压缩'; break;
         case COMPRESS_BROTLI: compressionName = 'Brotli'; break;
-        case COMPRESS_LZMA: compressionName = 'LZMA'; break;
-        case COMPRESS_PAKO: compressionName = 'Deflate'; break;
+        case COMPRESS_ZSTD: compressionName = 'Zstd'; break;
         default: compressionName = '未知';
     }
     
@@ -257,8 +259,8 @@ async function decrypt(emojiStr) {
     let dataStart = 0;
 
     // 检查头部 (注意：11 必须在 10 之前检查，因为 10 是 11 的前缀)
-    if (binaryStr.slice(0, 2) === COMPRESS_LZMA) {
-        header = COMPRESS_LZMA;
+    if (binaryStr.slice(0, 2) === COMPRESS_ZSTD) {
+        header = COMPRESS_ZSTD;
         dataStart = 2;
     } else if (binaryStr.slice(0, 2) === COMPRESS_BROTLI) {
         header = COMPRESS_BROTLI;
@@ -278,8 +280,8 @@ async function decrypt(emojiStr) {
         utf8Data = compressedData;
     } else if (header === COMPRESS_BROTLI) {
         utf8Data = await decompressBrotli(compressedData);
-    } else if (header === COMPRESS_LZMA) {
-        utf8Data = await decompressLzma(compressedData);
+    } else if (header === COMPRESS_ZSTD) {
+        utf8Data = await decompressZstd(compressedData);
     }
     
     if (!utf8Data) {
@@ -292,7 +294,7 @@ async function decrypt(emojiStr) {
     switch (header) {
         case COMPRESS_NONE: compressionName = '无压缩'; break;
         case COMPRESS_BROTLI: compressionName = 'Brotli'; break;
-        case COMPRESS_LZMA: compressionName = 'LZMA'; break;
+        case COMPRESS_ZSTD: compressionName = 'Zstd'; break;
         default: compressionName = '未知';
     }
     
